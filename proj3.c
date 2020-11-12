@@ -285,7 +285,7 @@ void ls(tokenlist *tokens)
 		{
 			if (curr_clust == BPB_RootClus)
 			{
-				printf("ERROR: Already in root directory.");
+				printf("ERROR: Already in root directory.\n");
 			}
 			else
 			{
@@ -302,9 +302,9 @@ void ls(tokenlist *tokens)
 			}
 			else if (tempDir.DIR_Attr == 0x10)
 			{
-				printf("%s is a dir\n", tokens->items[1]);
 				//get clust 
-				n = tempDir.DIR_FstClusLO;
+				n = tempDir.DIR_FstClusHI << 16;
+				n += tempDir.DIR_FstClusLO;
 				lsName(n);
 			}
 			else //if a file, print file name
@@ -318,8 +318,8 @@ void ls(tokenlist *tokens)
 	{
 		printf("ERROR: Invalid number of arguments");
 	}
+
 	printf("\n");
-	//low word give the first cluster n
 }
 
 void lsName(unsigned long n)
@@ -328,13 +328,15 @@ void lsName(unsigned long n)
 	struct DIRENTRY tempDir;
 
 	Offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
+	unsigned int nOffset = Offset;
+
 	lseek(file_img, Offset, SEEK_SET);
 	read(file_img, &tempDir, 32);
 
-	while (tempDir.DIR_Name[0] != 0x0)
+	while (tempDir.DIR_Name[0] != 0x0 && Offset <  0xFFFFFF8)
 	{
 
-		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0 && tempDir.DIR_Name[0] != 0x2E)
+		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0)
 		{
 			int j;
 			for (j = 0; j < 11; j++)
@@ -345,6 +347,21 @@ void lsName(unsigned long n)
 			printf("    ");
 		}
 		Offset += 32;
+
+		if(Offset > nOffset + BPB_BytsPerSec)
+		{
+			//if reach the end of this cluster
+			//move to next cluster
+			unsigned int nextClus;
+			unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + n * 4;
+			lseek(file_img, fatOffset, SEEK_SET);
+			read(file_img, &nextClus, 4);
+			n = nextClus;
+			//printf("Next clust is %d\n", n);
+			Offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
+			nOffset = Offset;
+		}
+
 		lseek(file_img, Offset, SEEK_SET);
 		read(file_img, &tempDir, 32);
 	}
@@ -368,10 +385,11 @@ struct DIRENTRY pathSearch(char *path)
 	
 	n = curr_clust;
 	Offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
+	unsigned int nOffset = Offset;
 	lseek(file_img, Offset, SEEK_SET);
 	read(file_img, &tempDir, 32);
 
-	while (tempDir.DIR_Name[0] != 0x0)
+	while (tempDir.DIR_Name[0] != 0x0 && Offset < 0xFFFFFF8)
 	{
 		char name[12];
 		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0 && tempDir.DIR_Name[0] != 0x2E)
@@ -390,6 +408,19 @@ struct DIRENTRY pathSearch(char *path)
 			
 		}
 		Offset += 32;
+		if(Offset > nOffset + BPB_BytsPerSec)
+		{
+			//if reach the end of this cluster
+			//move to next cluster
+			unsigned int nextClus;
+			unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + n * 4;
+			lseek(file_img, fatOffset, SEEK_SET);
+			read(file_img, &nextClus, 4);
+			n = nextClus;
+			//printf("Next clust is %d\n", n);
+			Offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
+			nOffset = Offset;
+		}
 		lseek(file_img, Offset, SEEK_SET);
 		read(file_img, &tempDir, 32);
 	}
