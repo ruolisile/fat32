@@ -28,6 +28,8 @@ void ls(tokenlist *tokens);
 void lsName(unsigned long n); //print file names
 struct DIRENTRY pathSearch(char *path);//search file
 void size(tokenlist *tokens); //return size of a file
+void cd(tokenlist *tokens);//cd 
+
 //DIR entry
 struct DIRENTRY
 {
@@ -59,7 +61,14 @@ int file_img = 0;
 unsigned long n; //cluster
 int root;		 //root dir
 int curr_clust;	 //current cluster
-int pre_clust;	 //paraent cluster
+int pare_clust;	 //paraent cluster
+
+
+struct DIR{
+	unsigned int pare_clust;
+};
+struct DIR curr_dir;
+struct DIR pare_dir;
 
 int main(int argc, char *argv[])
 {
@@ -111,6 +120,10 @@ int main(int argc, char *argv[])
 		else if (strcmp(command, "ls") == 0)
 		{
 			ls(tokens);
+		}
+		else if(strcmp(command, "cd") == 0)
+		{
+			cd(tokens);
 		}
 		free(command);
 		free(input);
@@ -289,7 +302,7 @@ void ls(tokenlist *tokens)
 			}
 			else
 			{
-				n = pre_clust;
+				n = pare_clust;
 				lsName(n);
 			}
 		}
@@ -298,7 +311,7 @@ void ls(tokenlist *tokens)
 			struct DIRENTRY tempDir = pathSearch(tokens->items[1]);	
 			if(tempDir.DIR_Name[0] == 0x0)
 			{
-				printf("ERROR: File/directory not found");
+				printf("ERROR: File/directory not found\n");
 			}
 			else if (tempDir.DIR_Attr == 0x10)
 			{
@@ -316,10 +329,8 @@ void ls(tokenlist *tokens)
 	}
 	else
 	{
-		printf("ERROR: Invalid number of arguments");
+		printf("ERROR: Invalid number of arguments\n");
 	}
-
-	printf("\n");
 }
 
 void lsName(unsigned long n)
@@ -344,7 +355,7 @@ void lsName(unsigned long n)
 				if (tempDir.DIR_Name[j] != ' ')
 					printf("%c", tempDir.DIR_Name[j]);
 			}
-			printf("    ");
+			printf("\n");
 		}
 		Offset += 32;
 
@@ -402,7 +413,6 @@ struct DIRENTRY pathSearch(char *path)
 			name[11] = '\0';
 			if (strcmp(name, pathUp) == 0)
 			{
-				printf("Found\n");
 				return tempDir;
 			}
 			
@@ -425,6 +435,7 @@ struct DIRENTRY pathSearch(char *path)
 		read(file_img, &tempDir, 32);
 	}
 	tempDir.DIR_Name[0] == 0x0;
+	//return dir entry with name started at 0 if not found
 	return tempDir;//if path not found	
 	
 }
@@ -449,4 +460,48 @@ void size(tokenlist *tokens)
 		
 	}
 	
+}
+
+void cd(tokenlist *tokens)
+{
+	if(tokens->size == 1)
+	{
+		curr_clust = BPB_RootClus;//cd to root
+		pare_clust = BPB_RootClus;
+
+	}
+	else if(strcmp(tokens->items[1], ".") == 0)
+	{
+		curr_clust = curr_clust;
+		pare_clust = pare_clust;
+	}
+	else if(strcmp(tokens->items[1], "..") == 0)
+	{
+		if(curr_clust == BPB_RootClus)
+		{
+			printf("ERROR: Already in root directory\n");
+		}
+		
+	}
+	else
+	{
+		struct DIRENTRY tempDir = pathSearch(tokens->items[1]);
+		if(tempDir.DIR_Name[0] == 0x0)
+		{
+			printf("ERROR: Directory not found\n");
+		}
+		else if(tempDir.DIR_Attr != 0x10)//not a dir
+		{
+			printf("ERROR: Not a directory\n");
+		}
+		else 
+		{
+			pare_clust = curr_clust;
+			curr_clust = tempDir.DIR_FstClusHI << 16;
+			curr_clust += tempDir.DIR_FstClusLO;
+		}
+		
+	}
+	
+
 }
