@@ -29,7 +29,8 @@ void lsName(unsigned long n); //print file names
 struct DIRENTRY pathSearch(char *path);//search file
 void size(tokenlist *tokens); //return size of a file
 void cd(tokenlist *tokens);//cd 
-
+unsigned int findEmptyClus(void);//find next empty clus
+void create(tokenlist * tokens); //create file
 //DIR entry
 struct DIRENTRY
 {
@@ -78,7 +79,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	//open disk image
-	file_img = open(argv[1], O_RDONLY);
+	file_img = open(argv[1], O_RDWR);
 	if (file_img < 0)
 	{
 		printf("ERROR: Failed to open disk image \n");
@@ -124,6 +125,10 @@ int main(int argc, char *argv[])
 		else if(strcmp(command, "cd") == 0)
 		{
 			cd(tokens);
+		}
+		else if(strcmp(command, "create") == 0)
+		{
+			create(tokens);
 		}
 		free(command);
 		free(input);
@@ -504,4 +509,70 @@ void cd(tokenlist *tokens)
 	}
 	
 
+}
+
+void create(tokenlist *tokens)
+{
+	struct DIRENTRY newFile;
+	unsigned int emptClus = findEmptyClus();
+
+	unsigned int lastClus = 0x0FFFFF8;
+	lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + emptClus * 4, SEEK_SET);
+	//set emptclus to last cluster
+	write(file_img, &lastClus, 4);
+	//copy name 
+	char *fileName = tokens->items[1];
+	for(int i = 0; i < strlen(fileName); i++)
+	{
+		newFile.DIR_Name[i] = toupper(fileName[i]);
+	}
+	for(int i = strlen(fileName); i < 11; i++)
+	{
+		newFile.DIR_Name[i] = ' ';
+	}
+
+	newFile.DIR_Attr = 0x20;
+	newFile.DIR_NTRes = 0;
+	newFile.DIR_CrtTimeTenth = 0;
+	newFile.DIR_CrtTime = 0;
+	newFile.DIR_CrtDate = 0;
+	newFile.DIR_LstAccDate = 0;
+	newFile.DIR_FstClusHI = (emptClus >> 16) & 0xFFFF;
+	newFile.DIR_WrtTime = 0;
+	newFile.DIR_WrtDate = 0;
+	newFile.DIR_FstClusLO = 0xFFFF & emptClus;
+	newFile.DIR_FileSize = 0;
+
+	struct DIRENTRY temp;
+	unsigned int offSet;
+	offSet = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+
+	while (1)
+	{
+	
+		lseek(file_img, offSet, SEEK_SET);
+		read(file_img, &temp, 32);
+		if(temp.DIR_Name[0] == 0x0)
+		{
+			lseek(file_img, offSet, SEEK_SET);
+			int a = write(file_img, &newFile, 32);
+			return;
+		}
+		offSet += 32;
+	}	
+
+}
+
+unsigned int findEmptyClus()
+{
+	unsigned int tempClus = BPB_RootClus;
+	unsigned int clus = tempClus;
+	while (clus != 0)
+	{
+		tempClus++;
+		lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + tempClus * 4, SEEK_SET);
+		read(file_img, &clus, 4);
+	}
+	return tempClus;
+	
 }
