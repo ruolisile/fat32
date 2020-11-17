@@ -65,13 +65,6 @@ int root;		 //root dir
 int curr_clust;	 //current cluster
 int pare_clust;	 //paraent cluster
 
-
-struct DIR{
-	unsigned int pare_clust;
-};
-struct DIR curr_dir;
-struct DIR pare_dir;
-
 int main(int argc, char *argv[])
 {
 	if (argc != 2)
@@ -510,10 +503,7 @@ void cd(tokenlist *tokens)
 			curr_clust = tempDir.DIR_FstClusHI << 16;
 			curr_clust += tempDir.DIR_FstClusLO;
 		}
-		
 	}
-	
-
 }
 
 void create(tokenlist *tokens)
@@ -574,7 +564,7 @@ void create(tokenlist *tokens)
 				{
 					lseek(file_img, offSet, SEEK_SET);
 					int a = write(file_img, &newFile, 32);
-					return;
+					break;
 				}
 				offSet += 32;
 			}		
@@ -663,26 +653,25 @@ void mkdir(tokenlist *tokens)
 
 			struct DIRENTRY pareDir;
 			strncpy(pareDir.DIR_Name, "..           ", 11);
-			newDir.DIR_Attr = 0x10;
-			newDir.DIR_NTRes = 0;
-			newDir.DIR_CrtTimeTenth = 0;
-			newDir.DIR_CrtTime = 0;
-			newDir.DIR_CrtDate = 0;
-			newDir.DIR_LstAccDate = 0;
-			newDir.DIR_FstClusHI = (curr_clust >> 16) & 0xFFFF;
-			newDir.DIR_WrtTime = 0;
-			newDir.DIR_WrtDate = 0;
-			newDir.DIR_FstClusLO = 0xFFFF & curr_clust;
-			newDir.DIR_FileSize = 0;
-
+			pareDir.DIR_Attr = 0x10;
+			pareDir.DIR_NTRes = 0;
+			pareDir.DIR_CrtTimeTenth = 0;
+			pareDir.DIR_CrtTime = 0;
+			pareDir.DIR_CrtDate = 0;
+			pareDir.DIR_LstAccDate = 0;
+			pareDir.DIR_FstClusHI = (curr_clust >> 16) & 0xFFFF;
+			pareDir.DIR_WrtTime = 0;
+			pareDir.DIR_WrtDate = 0;
+			pareDir.DIR_FstClusLO = 0xFFFF & curr_clust;
+			pareDir.DIR_FileSize = 0;
+			//add parent entry
 			offSet =  BPB_BytsPerSec * (FirstDataSector + (emptClus - 2) * BPB_SecPerClus);
 			lseek(file_img, offSet, SEEK_SET);
 			write(file_img, &pareDir, 32);
-			printf("Wrote parent to offset %d", offSet);
-
+			//add current dir entry
 			strncpy(temp.DIR_Name, ".           ", 11);
 			write(file_img, &temp, 32);
-			
+			//add empty dir entry
 			struct DIRENTRY emptEntry;
 			emptEntry.DIR_Name[0] = 0x0;
 			write(file_img, &emptEntry, 32);
