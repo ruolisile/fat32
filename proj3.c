@@ -31,6 +31,7 @@ void size(tokenlist *tokens); //return size of a file
 void cd(tokenlist *tokens);//cd 
 unsigned int findEmptyClus(void);//find next empty clus
 void create(tokenlist * tokens); //create file
+void mkdir(tokenlist *tokens);
 //DIR entry
 struct DIRENTRY
 {
@@ -129,6 +130,10 @@ int main(int argc, char *argv[])
 		else if(strcmp(command, "create") == 0)
 		{
 			create(tokens);
+		}
+		else if(strcmp(command, "mkdir") == 0)
+		{
+			mkdir(tokens);
 		}
 		free(command);
 		free(input);
@@ -299,7 +304,7 @@ void ls(tokenlist *tokens)
 			n = curr_clust;
 			lsName(n);
 		}
-		if (strcmp(tokens->items[1], "..") == 0)
+		else if (strcmp(tokens->items[1], "..") == 0)
 		{
 			if (curr_clust == BPB_RootClus)
 			{
@@ -466,7 +471,7 @@ void size(tokenlist *tokens)
 	}
 	
 }
-
+//only work for directory with no duplicate names
 void cd(tokenlist *tokens)
 {
 	if(tokens->size == 1)
@@ -513,53 +518,69 @@ void cd(tokenlist *tokens)
 
 void create(tokenlist *tokens)
 {
-	struct DIRENTRY newFile;
-	unsigned int emptClus = findEmptyClus();
-
-	unsigned int lastClus = 0x0FFFFF8;
-	lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + emptClus * 4, SEEK_SET);
-	//set emptclus to last cluster
-	write(file_img, &lastClus, 4);
-	//copy name 
-	char *fileName = tokens->items[1];
-	for(int i = 0; i < strlen(fileName); i++)
+	if (tokens->size < 2)
 	{
-		newFile.DIR_Name[i] = toupper(fileName[i]);
+		printf("ERROR: Too few arguments. Usage create <file>\n");
 	}
-	for(int i = strlen(fileName); i < 11; i++)
+	else
 	{
-		newFile.DIR_Name[i] = ' ';
-	}
-
-	newFile.DIR_Attr = 0x20;
-	newFile.DIR_NTRes = 0;
-	newFile.DIR_CrtTimeTenth = 0;
-	newFile.DIR_CrtTime = 0;
-	newFile.DIR_CrtDate = 0;
-	newFile.DIR_LstAccDate = 0;
-	newFile.DIR_FstClusHI = (emptClus >> 16) & 0xFFFF;
-	newFile.DIR_WrtTime = 0;
-	newFile.DIR_WrtDate = 0;
-	newFile.DIR_FstClusLO = 0xFFFF & emptClus;
-	newFile.DIR_FileSize = 0;
-
-	struct DIRENTRY temp;
-	unsigned int offSet;
-	offSet = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
-
-	while (1)
-	{
-	
-		lseek(file_img, offSet, SEEK_SET);
-		read(file_img, &temp, 32);
-		if(temp.DIR_Name[0] == 0x0)
+		struct DIRENTRY tempDir = pathSearch(tokens->items[1]);
+		if(tempDir.DIR_Name[0] != 0x0)
 		{
-			lseek(file_img, offSet, SEEK_SET);
-			int a = write(file_img, &newFile, 32);
-			return;
+			printf("ERROR: File already exists\n");
 		}
-		offSet += 32;
-	}	
+		else
+		{
+			struct DIRENTRY newFile;
+			unsigned int emptClus = findEmptyClus();
+
+			unsigned int lastClus = 0x0FFFFF8;
+			lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + emptClus * 4, SEEK_SET);
+			//set emptclus to last cluster
+			write(file_img, &lastClus, 4);
+			//copy name 
+			char *fileName = tokens->items[1];
+			for(int i = 0; i < strlen(fileName); i++)
+			{
+				newFile.DIR_Name[i] = toupper(fileName[i]);
+			}
+			for(int i = strlen(fileName); i < 11; i++)
+			{
+				newFile.DIR_Name[i] = ' ';
+			}
+
+			newFile.DIR_Attr = 0x20;
+			newFile.DIR_NTRes = 0;
+			newFile.DIR_CrtTimeTenth = 0;
+			newFile.DIR_CrtTime = 0;
+			newFile.DIR_CrtDate = 0;
+			newFile.DIR_LstAccDate = 0;
+			newFile.DIR_FstClusHI = (emptClus >> 16) & 0xFFFF;
+			newFile.DIR_WrtTime = 0;
+			newFile.DIR_WrtDate = 0;
+			newFile.DIR_FstClusLO = 0xFFFF & emptClus;
+			newFile.DIR_FileSize = 0;
+
+			struct DIRENTRY temp;
+			unsigned int offSet;
+			offSet = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+
+			while (1)
+			{
+			
+				lseek(file_img, offSet, SEEK_SET);
+				read(file_img, &temp, 32);
+				if(temp.DIR_Name[0] == 0x0)
+				{
+					lseek(file_img, offSet, SEEK_SET);
+					int a = write(file_img, &newFile, 32);
+					return;
+				}
+				offSet += 32;
+			}		
+		}
+		
+	}
 
 }
 
@@ -575,4 +596,97 @@ unsigned int findEmptyClus()
 	}
 	return tempClus;
 	
+}
+
+void mkdir(tokenlist *tokens)
+{
+	if (tokens->size < 2)
+	{
+		printf("ERROR: Too few arguments. Usage mkdir <directory>\n");
+	}
+	else
+	{
+		struct DIRENTRY tempDir = pathSearch(tokens->items[1]);
+		if(tempDir.DIR_Name[0] != 0x0 && tempDir.DIR_Attr == 0x10)
+		{
+			printf("ERROR: Directory already exists\n");
+		}
+		else
+		{
+			struct DIRENTRY newDir;
+			unsigned int emptClus = findEmptyClus();
+
+			unsigned int lastClus = 0x0FFFFF8;
+			lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + emptClus * 4, SEEK_SET);
+			//set emptclus to last cluster
+			write(file_img, &lastClus, 4);
+			//copy name 
+			char *fileName = tokens->items[1];
+			for(int i = 0; i < strlen(fileName); i++)
+			{
+				newDir.DIR_Name[i] = toupper(fileName[i]);
+			}
+			for(int i = strlen(fileName); i < 11; i++)
+			{
+				newDir.DIR_Name[i] = ' ';
+			}
+
+			newDir.DIR_Attr = 0x10;
+			newDir.DIR_NTRes = 0;
+			newDir.DIR_CrtTimeTenth = 0;
+			newDir.DIR_CrtTime = 0;
+			newDir.DIR_CrtDate = 0;
+			newDir.DIR_LstAccDate = 0;
+			newDir.DIR_FstClusHI = (emptClus >> 16) & 0xFFFF;
+			newDir.DIR_WrtTime = 0;
+			newDir.DIR_WrtDate = 0;
+			newDir.DIR_FstClusLO = 0xFFFF & emptClus;
+			newDir.DIR_FileSize = 0;
+
+			struct DIRENTRY temp;
+			unsigned int offSet;
+			offSet = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+
+			while (1)
+			{
+			
+				lseek(file_img, offSet, SEEK_SET);
+				read(file_img, &temp, 32);
+				if(temp.DIR_Name[0] == 0x0)
+				{
+					lseek(file_img, offSet, SEEK_SET);
+					int a = write(file_img, &newDir, 32);
+					break;
+				}
+				offSet += 32;
+			}	
+
+			struct DIRENTRY pareDir;
+			strncpy(pareDir.DIR_Name, "..           ", 11);
+			newDir.DIR_Attr = 0x10;
+			newDir.DIR_NTRes = 0;
+			newDir.DIR_CrtTimeTenth = 0;
+			newDir.DIR_CrtTime = 0;
+			newDir.DIR_CrtDate = 0;
+			newDir.DIR_LstAccDate = 0;
+			newDir.DIR_FstClusHI = (curr_clust >> 16) & 0xFFFF;
+			newDir.DIR_WrtTime = 0;
+			newDir.DIR_WrtDate = 0;
+			newDir.DIR_FstClusLO = 0xFFFF & curr_clust;
+			newDir.DIR_FileSize = 0;
+
+			offSet =  BPB_BytsPerSec * (FirstDataSector + (emptClus - 2) * BPB_SecPerClus);
+			lseek(file_img, offSet, SEEK_SET);
+			write(file_img, &pareDir, 32);
+			printf("Wrote parent to offset %d", offSet);
+
+			strncpy(temp.DIR_Name, ".           ", 11);
+			write(file_img, &temp, 32);
+			
+			struct DIRENTRY emptEntry;
+			emptEntry.DIR_Name[0] = 0x0;
+			write(file_img, &emptEntry, 32);
+		}
+		
+	}	
 }
