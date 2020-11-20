@@ -42,3 +42,13 @@ Usage `create <file>` </br>
 by Liting Zhang </br>
 Create new directory. </br>
 Usage `mkdir <directory>` </br>
+
+### open
+by Liting Zhang </br>
+Open a file. </br>
+Usage `open <file> <mode>`. Valid modes are `r, w, rw, wr`. </br>
+
+### close
+by Liting Zhang </br>
+Close an opended file.</br>
+Usage `close <file>`. 
