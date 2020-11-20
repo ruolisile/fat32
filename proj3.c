@@ -27,7 +27,7 @@ void info(void);
 void ls(tokenlist *tokens);
 void lsName(unsigned long n);			//print file names
 struct DIRENTRY pathSearch(char *path); //search file
-unsigned int size(tokenlist *tokens);			//return size of a file
+unsigned int size(tokenlist *tokens);	//return size of a file
 void cd(tokenlist *tokens);				//cd
 unsigned int findEmptyClus(void);		//find next empty clus
 void create(tokenlist *tokens);			//create file
@@ -35,12 +35,13 @@ void mkdir(tokenlist *tokens);
 void openFile(tokenlist *tokens); //open file
 //add to open file list
 void addOpenFile(unsigned int clust, tokenlist *tokens);
-struct openFile* isFileOpened(unsigned int clust, char *name); // if file is open
-void freeFile(void);//free opened files
+struct openFile *isFileOpened(unsigned int clust, char *name); // if file is open
+void freeFile(void);										   //free opened files
 void closeFile(tokenlist *tokens);
 void removeOpenFile(unsigned int clust, tokenlist *tokens);
-void printlist();//print open file list
-void lseekFile(tokenlist *tokens);//lseek an open file
+void printlist();				   //print open file list
+void lseekFile(tokenlist *tokens); //lseek an open file
+void readFile(tokenlist *tokens);
 //DIR entry
 struct DIRENTRY
 {
@@ -155,20 +156,24 @@ int main(int argc, char *argv[])
 		{
 			openFile(tokens);
 		}
-		else if(strcmp(command, "close") == 0)
+		else if (strcmp(command, "close") == 0)
 		{
 			closeFile(tokens);
 		}
-		else if(strcmp(command, "lseek") == 0)
+		else if (strcmp(command, "lseek") == 0)
 		{
-			 lseekFile(tokens);
+			lseekFile(tokens);
 		}
-		
-		else if(strcmp(command, "print") == 0)
+
+		else if (strcmp(command, "print") == 0)
 		{
 			printlist();
 		}
-		
+		else if (strcmp(command, "read") == 0)
+		{
+			readFile(tokens);
+		}
+
 		free(command);
 		free(input);
 		free_tokens(tokens);
@@ -729,7 +734,7 @@ void openFile(tokenlist *tokens)
 			printf("ERROR: %s is a direcotry. Cannot open a directory\n", tokens->items[1]);
 		}
 		else if (strcmp(tokens->items[2], "rw") != 0 && strcmp(tokens->items[2], "w") != 0 &&
-				 strcmp(tokens->items[2], "wr") != 0 && strcmp(tokens->items[2], "r") != 0 )
+				 strcmp(tokens->items[2], "wr") != 0 && strcmp(tokens->items[2], "r") != 0)
 		{
 			printf("ERROR: Invalid mode. Valid modes are r, w, rw, wr\n");
 		}
@@ -768,18 +773,18 @@ void addOpenFile(unsigned int clust, tokenlist *tokens)
 	head = file_ptr;
 }
 
-struct openFile* isFileOpened(unsigned int clust, char *name)
+struct openFile *isFileOpened(unsigned int clust, char *name)
 {
 	struct openFile *temp = head;
-	if(head == NULL)
+	if (head == NULL)
 	{
-		return NULL;//not in the list
+		return NULL; //not in the list
 	}
 	while (temp->firstClus != clust | strcmp(temp->name, name) != 0)
 	{
-		if(temp->next == NULL)
+		if (temp->next == NULL)
 		{
-			return NULL;//not in the list
+			return NULL; //not in the list
 		}
 		else
 		{
@@ -787,13 +792,12 @@ struct openFile* isFileOpened(unsigned int clust, char *name)
 		}
 	}
 	return temp;
-	
 }
 void freeFile()
 {
 	struct openFile *current = head;
 	struct openFile *temp;
-	if(head != NULL)
+	if (head != NULL)
 	{
 		while (current->next != NULL)
 		{
@@ -807,7 +811,7 @@ void freeFile()
 
 void closeFile(tokenlist *tokens)
 {
-	if(tokens->size < 2)
+	if (tokens->size < 2)
 	{
 		printf("ERROR: Too few arguments. Usage: close <File>");
 	}
@@ -839,22 +843,21 @@ void closeFile(tokenlist *tokens)
 	}
 }
 
-
 void removeOpenFile(unsigned int clust, tokenlist *tokens)
 {
 	struct openFile *current = head;
 	struct openFile *previous = NULL;
-	if(head == NULL)
+	if (head == NULL)
 	{
 		return;
 	}
-	while (current->firstClus != clust | strcmp(current->name, tokens->items[1]) !=0)
+	while (current->firstClus != clust | strcmp(current->name, tokens->items[1]) != 0)
 	{
 		previous = current;
 		current = current->next;
 	}
 	//if found a match and delete, update link
-	if(current == head)
+	if (current == head)
 	{
 		head = head->next;
 	}
@@ -876,7 +879,7 @@ void printlist()
 
 void lseekFile(tokenlist *tokens)
 {
-	if(tokens->size < 3)
+	if (tokens->size < 3)
 	{
 		printf("ERROR: Too few arguments. Usage: lseek <file> <size>");
 	}
@@ -892,14 +895,14 @@ void lseekFile(tokenlist *tokens)
 			unsigned int clust = file.DIR_FstClusHI << 16;
 			clust += file.DIR_FstClusLO;
 			struct openFile *temp = isFileOpened(clust, tokens->items[1]);
-			if(temp == NULL)
+			if (temp == NULL)
 			{
 				printf("ERROR: File is not open\n");
 			}
 			else
 			{
 				unsigned int offset = strtoul(tokens->items[2], NULL, 10);
-				if(offset > size(tokens))
+				if (offset > size(tokens))
 				{
 					printf("ERROR: Offset cannot greater than file size. \n");
 				}
@@ -907,6 +910,87 @@ void lseekFile(tokenlist *tokens)
 				{
 					temp->offSet = offset;
 				}
+			}
+		}
+	}
+}
+
+void readFile(tokenlist *tokens)
+{
+	if (tokens->size < 3)
+	{
+		printf("ERROR: Too few arguments. Usage: read <file> <size>");
+	}
+	else
+	{
+		struct DIRENTRY file = pathSearch(tokens->items[1]);
+		if (file.DIR_Name[0] == 0x0)
+		{
+			printf("ERROR: File not exits\n");
+		}
+		else if (file.DIR_Attr == 0X10)
+		{
+			printf("ERROR: Cannot read a directory\n");
+		}
+		else
+		{
+			unsigned int clust = file.DIR_FstClusHI << 16;
+			clust += file.DIR_FstClusLO;
+			struct openFile *temp = isFileOpened(clust, tokens->items[1]);
+			if (isFileOpened(clust, tokens->items[1])== NULL)
+			{
+				printf("ERROR: File is not open. Please open the file first\n");
+			}
+			else if (strcmp(temp->mode, "w") == 0)
+			{
+				printf("ERROR: This file is open in write mode only\n");
+			}
+			else
+			{
+
+				unsigned int readBytes = strtoul(tokens->items[2], NULL, 10);
+				unsigned int byteToRead = readBytes;
+				unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (temp->firstClus - 2) * BPB_SecPerClus) +
+										temp->offSet;
+				unsigned int clus = temp->firstClus;//store current clust number
+				lseek(file_img, offset, SEEK_SET);
+				if(byteToRead > (file.DIR_FileSize - temp->offSet))
+				{
+					byteToRead = (file.DIR_FileSize - temp->offSet);
+				}
+				while (byteToRead > 0)
+				{
+
+					if (byteToRead >= BPB_BytsPerSec)
+					{
+						unsigned char data[BPB_BytsPerSec + 1];
+						int temp = read(file_img, &data, BPB_BytsPerSec);
+						data[BPB_BytsPerSec] = '\0';
+						printf("%s", data);
+						byteToRead -=  BPB_BytsPerSec;
+
+						unsigned int nextClust;
+						unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
+						lseek(file_img, fatOffset, SEEK_SET);
+						read(file_img, &nextClust, 4);
+						clust = nextClust;
+						offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
+						lseek(file_img, offset, SEEK_SET);
+
+					}
+					else 
+					{
+
+						unsigned char data[byteToRead];
+						int temp= read(file_img, &data, byteToRead);
+						data[byteToRead] = '\0';
+		
+						printf("%s", data);
+						byteToRead = 0;
+	
+					}
+				}
+				printf("\n");
 			}
 		}
 	}
