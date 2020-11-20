@@ -31,7 +31,7 @@ by Liting Zhang </br>
 Change the working directory to the given directory. </br>
 Usage `cd <directory>` </br>
 If `<directory>` is not specify, change working directory to root. </br>
-Not able to change back to parent directory by using `..` </br>
+Not able to change back to parent directory by using `..`. Will make it work if time allows. </br>
 
 ### create
 by Liting Zhang </br>
@@ -54,6 +54,11 @@ Close an opended file. Can only close a file A if the current working directory 
 Usage `close <file>`. 
 
 ### lseek
-by Liting Zhang
+by Liting Zhang </br>
 Set offset in bytes for further reading or writing given an opened file. </br>
 Usage `lseek <file> <offset>`
+
+### read
+by Liting ZHang </br>
+Read a file given number of bytes to read. </br>
+Usage `read <file> <size>`
