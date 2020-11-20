@@ -34,12 +34,12 @@ void create(tokenlist *tokens);			//create file
 void mkdir(tokenlist *tokens);
 void openFile(tokenlist *tokens); //open file
 //add to open file list
-void addOpenFile(unsigned int clust, unsigned int offSet, tokenlist *tokens);
+void addOpenFile(unsigned int clust, tokenlist *tokens);
 int isFileOpened(unsigned int clust, char *name); // if file is open
 void freeFile(void);//free opened files
 void closeFile(tokenlist *tokens);
 void removeOpenFile(unsigned int clust, tokenlist *tokens);
-void printlist();
+void printlist();//print open file list
 //DIR entry
 struct DIRENTRY
 {
@@ -744,18 +744,18 @@ void openFile(tokenlist *tokens)
 			}
 			else
 			{
-				addOpenFile(clust, offSet, tokens);
+				addOpenFile(clust, tokens);
 				printf("Open %s in %s mode\n", tokens->items[1], tokens->items[2]);
 			}
 		}
 	}
 }
 
-void addOpenFile(unsigned int clust, unsigned int offSet, tokenlist *tokens)
+void addOpenFile(unsigned int clust, tokenlist *tokens)
 {
 	struct openFile *file_ptr = (struct openFile *)malloc(sizeof(struct openFile));
 	file_ptr->firstClus = clust;
-	file_ptr->offSet = offSet;
+	file_ptr->offSet = 0;
 	strcpy(file_ptr->name, tokens->items[1]);
 	strcpy(file_ptr->mode, tokens->items[2]);
 	file_ptr->next = head;
