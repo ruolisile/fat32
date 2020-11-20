@@ -27,7 +27,7 @@ void info(void);
 void ls(tokenlist *tokens);
 void lsName(unsigned long n);			//print file names
 struct DIRENTRY pathSearch(char *path); //search file
-void size(tokenlist *tokens);			//return size of a file
+unsigned int size(tokenlist *tokens);			//return size of a file
 void cd(tokenlist *tokens);				//cd
 unsigned int findEmptyClus(void);		//find next empty clus
 void create(tokenlist *tokens);			//create file
@@ -35,11 +35,12 @@ void mkdir(tokenlist *tokens);
 void openFile(tokenlist *tokens); //open file
 //add to open file list
 void addOpenFile(unsigned int clust, tokenlist *tokens);
-int isFileOpened(unsigned int clust, char *name); // if file is open
+struct openFile* isFileOpened(unsigned int clust, char *name); // if file is open
 void freeFile(void);//free opened files
 void closeFile(tokenlist *tokens);
 void removeOpenFile(unsigned int clust, tokenlist *tokens);
 void printlist();//print open file list
+void lseekFile(tokenlist *tokens);//lseek an open file
 //DIR entry
 struct DIRENTRY
 {
@@ -132,7 +133,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strcmp(command, "size") == 0)
 		{
-			size(tokens);
+			printf("%d\n", size(tokens));
 		}
 		else if (strcmp(command, "ls") == 0)
 		{
@@ -158,6 +159,11 @@ int main(int argc, char *argv[])
 		{
 			closeFile(tokens);
 		}
+		else if(strcmp(command, "lseek") == 0)
+		{
+			 lseekFile(tokens);
+		}
+		
 		else if(strcmp(command, "print") == 0)
 		{
 			printlist();
@@ -475,7 +481,7 @@ struct DIRENTRY pathSearch(char *path)
 	return tempDir; //if path not found
 }
 
-void size(tokenlist *tokens)
+unsigned int size(tokenlist *tokens)
 {
 	if (tokens->size < 2)
 	{
@@ -490,7 +496,7 @@ void size(tokenlist *tokens)
 		}
 		else
 		{
-			printf("%d\n", tempDir.DIR_FileSize);
+			return tempDir.DIR_FileSize;
 		}
 	}
 }
@@ -738,7 +744,7 @@ void openFile(tokenlist *tokens)
 			unsigned int clust = file.DIR_FstClusHI << 16;
 			clust += file.DIR_FstClusLO;
 			unsigned int offSet = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
-			if (isFileOpened(clust, tokens->items[1]) == 0)
+			if (isFileOpened(clust, tokens->items[1]) != NULL)
 			{
 				printf("ERROR: Fill already open\n");
 			}
@@ -762,38 +768,41 @@ void addOpenFile(unsigned int clust, tokenlist *tokens)
 	head = file_ptr;
 }
 
-int isFileOpened(unsigned int clust, char *name)
+struct openFile* isFileOpened(unsigned int clust, char *name)
 {
 	struct openFile *temp = head;
 	if(head == NULL)
 	{
-		return 1;//not in the list
+		return NULL;//not in the list
 	}
 	while (temp->firstClus != clust | strcmp(temp->name, name) != 0)
 	{
 		if(temp->next == NULL)
 		{
-			return 1;//not in the list
+			return NULL;//not in the list
 		}
 		else
 		{
 			temp = temp->next;
 		}
 	}
-	return 0;
+	return temp;
 	
 }
 void freeFile()
 {
 	struct openFile *current = head;
 	struct openFile *temp;
-	while (current->next != NULL)
+	if(head != NULL)
 	{
-		temp = current->next;
+		while (current->next != NULL)
+		{
+			temp = current->next;
+			free(current);
+			current = temp;
+		}
 		free(current);
-		current = temp;
 	}
-	free(current);
 }
 
 void closeFile(tokenlist *tokens)
@@ -818,9 +827,7 @@ void closeFile(tokenlist *tokens)
 		{
 			unsigned int clust = file.DIR_FstClusHI << 16;
 			clust += file.DIR_FstClusLO;
-			unsigned int offSet = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
-
-			if (isFileOpened(clust, tokens->items[1]) != 0)
+			if (isFileOpened(clust, tokens->items[1]) == NULL)
 			{
 				printf("ERROR: Fill is not open\n");
 			}
@@ -862,7 +869,45 @@ void printlist()
 	struct openFile *ptr = head;
 	while (ptr != NULL)
 	{
-		printf("%s %d %s\n", ptr->name, ptr->firstClus, ptr->mode);
+		printf("File %s is open in %s mode; Clust is %d, Offset is %d\n", ptr->name, ptr->mode, ptr->firstClus, ptr->offSet);
 		ptr = ptr->next;
+	}
+}
+
+void lseekFile(tokenlist *tokens)
+{
+	if(tokens->size < 3)
+	{
+		printf("ERROR: Too few arguments. Usage: lseek <file> <size>");
+	}
+	else
+	{
+		struct DIRENTRY file = pathSearch(tokens->items[1]);
+		if (file.DIR_Name[0] == 0x0)
+		{
+			printf("ERROR: File not exits\n");
+		}
+		else
+		{
+			unsigned int clust = file.DIR_FstClusHI << 16;
+			clust += file.DIR_FstClusLO;
+			struct openFile *temp = isFileOpened(clust, tokens->items[1]);
+			if(temp == NULL)
+			{
+				printf("ERROR: File is not open\n");
+			}
+			else
+			{
+				unsigned int offset = strtoul(tokens->items[2], NULL, 10);
+				if(offset > size(tokens))
+				{
+					printf("ERROR: Offset cannot greater than file size. \n");
+				}
+				else
+				{
+					temp->offSet = offset;
+				}
+			}
+		}
 	}
 }
