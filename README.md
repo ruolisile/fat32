@@ -50,5 +50,10 @@ Usage `open <file> <mode>`. Valid modes are `r, w, rw, wr`. </br>
 
 ### close
 by Liting Zhang </br>
-Close an opended file.</br>
+Close an opended file. Can only close a file A if the current working directory contains file A.</br>
 Usage `close <file>`. 
+
+### lseek
+by Liting Zhang
+Set offset in bytes for further reading or writing given an opened file. </br>
+Usage `lseek <file> <offset>`
