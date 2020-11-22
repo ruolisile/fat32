@@ -82,6 +82,7 @@ unsigned int BPB_TotSec32 = 0;
 unsigned int BPB_FATSz32 = 0;
 unsigned int BPB_RootClus = 0;
 unsigned int FirstDataSector = 0;
+unsigned int BytsPerClus = 0;
 int file_img = 0;
 unsigned long n; //cluster
 int root;		 //root dir
@@ -316,6 +317,7 @@ void init(void)
 	//root = ((BPB_RootClus - 2) * BPB_SecPerClus) + FirstDataSector;
 	root = (BPB_NumFATs * BPB_FATSz32 * BPB_BytsPerSec) + (BPB_RsvdSecCnt * BPB_BytsPerSec);
 	curr_clust = BPB_RootClus; //set current clust to root
+	BytsPerClus = BPB_BytsPerSec * BPB_SecPerClus;
 }
 
 void info()
@@ -406,8 +408,8 @@ void lsName(unsigned long n)
 			printf("\n");
 		}
 		Offset += 32;
-
-		if (Offset > nOffset + BPB_BytsPerSec)
+		//sector per clus is 1, so byts per sec = byts per clus
+		if (Offset > nOffset + BytsPerClus)
 		{
 			//if reach the end of this cluster
 			//move to next cluster
@@ -937,7 +939,7 @@ void readFile(tokenlist *tokens)
 			unsigned int clust = file.DIR_FstClusHI << 16;
 			clust += file.DIR_FstClusLO;
 			struct openFile *temp = isFileOpened(clust, tokens->items[1]);
-			if (isFileOpened(clust, tokens->items[1])== NULL)
+			if (isFileOpened(clust, tokens->items[1]) == NULL)
 			{
 				printf("ERROR: File is not open. Please open the file first\n");
 			}
@@ -947,47 +949,71 @@ void readFile(tokenlist *tokens)
 			}
 			else
 			{
-
 				unsigned int readBytes = strtoul(tokens->items[2], NULL, 10);
 				unsigned int byteToRead = readBytes;
-				unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (temp->firstClus - 2) * BPB_SecPerClus) +
-										temp->offSet;
-				unsigned int clus = temp->firstClus;//store current clust number
-				lseek(file_img, offset, SEEK_SET);
-				if(byteToRead > (file.DIR_FileSize - temp->offSet))
+				unsigned int tempOffset = temp->offSet;
+
+				while (tempOffset > BytsPerClus)
+				{ //update clus number and temp offset 
+					unsigned int nextClust;
+					unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
+					lseek(file_img, fatOffset, SEEK_SET);
+					read(file_img, &nextClust, 4);
+					clust = nextClust;
+					unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
+					lseek(file_img, offset, SEEK_SET);
+					tempOffset -= BytsPerClus;
+				}
+				//store current clust number		
+				unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (clust- 2) * BPB_SecPerClus);
+				lseek(file_img, offset + tempOffset, SEEK_SET);
+				if (byteToRead > (file.DIR_FileSize - temp->offSet))
 				{
 					byteToRead = (file.DIR_FileSize - temp->offSet);
 				}
+				//read current clust first
+				if(byteToRead >= (BytsPerClus - tempOffset))
+				{
+					unsigned char data[(BytsPerClus - tempOffset)+ 1];
+					int temp = read(file_img, &data, (BytsPerClus - tempOffset));
+					data[(BytsPerClus - tempOffset)] = '\0';
+					printf("%s", data);
+					byteToRead -= (BytsPerClus - tempOffset);
+					//move to next clust
+					unsigned int nextClust;
+					unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
+					lseek(file_img, fatOffset, SEEK_SET);
+					read(file_img, &nextClust, 4);
+					clust = nextClust;
+					unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
+					lseek(file_img, offset, SEEK_SET);
+				}
 				while (byteToRead > 0)
 				{
-
-					if (byteToRead >= BPB_BytsPerSec)
+					if (byteToRead > BytsPerClus)  
 					{
 						unsigned char data[BPB_BytsPerSec + 1];
 						int temp = read(file_img, &data, BPB_BytsPerSec);
 						data[BPB_BytsPerSec] = '\0';
 						printf("%s", data);
-						byteToRead -=  BPB_BytsPerSec;
-
+						byteToRead -= BPB_BytsPerSec;
+						//move to next clust
 						unsigned int nextClust;
 						unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
 						lseek(file_img, fatOffset, SEEK_SET);
 						read(file_img, &nextClust, 4);
 						clust = nextClust;
-						offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
+						unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 						lseek(file_img, offset, SEEK_SET);
-
 					}
-					else 
+					else
 					{
-
 						unsigned char data[byteToRead];
-						int temp= read(file_img, &data, byteToRead);
+						int temp = read(file_img, &data, byteToRead);
 						data[byteToRead] = '\0';
-		
+
 						printf("%s", data);
 						byteToRead = 0;
-	
 					}
 				}
 				printf("\n");
@@ -995,3 +1021,89 @@ void readFile(tokenlist *tokens)
 		}
 	}
 }
+
+// void writeFile(tokenlist *tokens)
+// {
+// 	if (tokens->size < 4)
+// 	{
+// 		printf("ERROR: Too few arguments. Usage: write <file> <size> <"
+// 			   "STRING>");
+// 	}
+// 	else
+// 	{
+// 		struct DIRENTRY file = pathSearch(tokens->items[1]);
+// 		if (file.DIR_Name[0] == 0x0)
+// 		{
+// 			printf("ERROR: File not exits\n");
+// 		}
+// 		else if (file.DIR_Attr == 0X10)
+// 		{
+// 			printf("ERROR: Cannot write a directory\n");
+// 		}
+// 		else
+// 		{
+// 			unsigned int clust = file.DIR_FstClusHI << 16;
+// 			clust += file.DIR_FstClusLO;
+// 			struct openFile *temp = isFileOpened(clust, tokens->items[1]);
+// 			if (isFileOpened(clust, tokens->items[1]) == NULL)
+// 			{
+// 				printf("ERROR: File is not open. Please open the file first\n");
+// 			}
+// 			else if (strcmp(temp->mode, "r") == 0)
+// 			{
+// 				printf("ERROR: This file is open in read mode only\n");
+// 			}
+// 			else
+// 			{
+
+
+// 				unsigned int writeBytes = strtoul(tokens->items[2], NULL, 10);
+// 				unsigned int byteToWrite = writeBytes;
+// 				unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (temp->firstClus - 2) * BPB_SecPerClus) +
+// 									  temp->offSet;
+// 				unsigned int clus = temp->firstClus; //store current clust number
+
+// 				char *string = (char *)malloc(strlen(tokens->items[3] + 1));
+// 				strcpy(string, tokens->items[3]);
+
+// 				lseek(file_img, offset, SEEK_SET);
+
+// 				if (byteToWrite > (file.DIR_FileSize - temp->offSet))
+// 				{
+// 					file.DIR_FileSize = temp->offSet + byteToWrite;
+// 				}
+// 				else
+// 				{
+// 					while (byteToWrite > 0)
+// 					{
+
+// 						if (byteToWrite >= BPB_BytsPerSec)
+// 						{
+// 							char *tempString;
+
+// 							int temp = read(file_img, &tempString, BPB_BytsPerSec);
+// 							data[BPB_BytsPerSec] = '\0';
+// 							printf("%s", data);
+// 							byteToWrite -= BPB_BytsPerSec;
+
+// 							unsigned int nextClust;
+// 							unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
+// 							lseek(file_img, fatOffset, SEEK_SET);
+// 							read(file_img, &nextClust, 4);
+// 							clust = nextClust;
+// 							offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
+// 							lseek(file_img, offset, SEEK_SET);
+// 						}
+// 					}
+
+// 					int temp = read(file_img, &data, byteToWrite);
+// 					data[byteToWrite] = '\0';
+
+// 					printf("%s", data);
+// 					byteToWrite = 0;
+// 				}
+// 				printf("\n");
+// 			}
+// 		}
+// 	}
+// }
