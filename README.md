@@ -62,3 +62,8 @@ Usage `lseek <file> <offset>`
 by Liting ZHang </br>
 Read a file given number of bytes to read. </br>
 Usage `read <file> <size>`
+
+### write
+by Liting Zhang </br>
+Write text to an open file given text and size of the text.</br>
+Usage `write <file> <size> <"string">`. Text to be written into a file should be inside qutation mark. 
