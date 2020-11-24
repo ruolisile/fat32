@@ -1153,6 +1153,11 @@ void writeFile(tokenlist *tokens)
 							lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4, SEEK_SET);
 							write(file_img, &nextclust, 4);
 							printf("allocate new class %d\n", nextclust);
+							
+							unsigned int lastClus = 0x0FFFFF8;
+							lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + nextclust * 4, SEEK_SET);
+							//set last cluster
+							write(file_img, &lastClus, 4);
 						}
 
 						//printf("empty clust is %d; write \n", nextclust);
@@ -1178,10 +1183,6 @@ void writeFile(tokenlist *tokens)
 							byteToWrite -= byteToWrite;
 						}
 					}
-					unsigned int lastClus = 0x0FFFFF8;
-					lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + clust* 4, SEEK_SET);
-					//set last cluster
-					write(file_img, &lastClus, 4);
 				}
 				//update file size in dir entry
 				file.DIR_FileSize = temp->offSet + writeBytes;
@@ -1255,6 +1256,7 @@ unsigned int updateClust(unsigned int clust)
 	//move to starting offset of next clust
 	unsigned int nextClust;
 	unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
+	printf("fatoffset is %x\n", fatOffset);
 	lseek(file_img, fatOffset, SEEK_SET);
 	read(file_img, &nextClust, 4);
 	return nextClust;
