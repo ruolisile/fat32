@@ -47,6 +47,8 @@ unsigned int updateClust(unsigned int clust);
 void writeToFile(char *string, unsigned int start, unsigned int size);
 void rmFile(char *FILE);
 void cpFile(tokenlist *tokens);
+void mvFile(char *FILE, char *dest);
+int isLastEntry(unsigned int src_offset, unsigned int curr_offset);
 //DIR entry
 struct DIRENTRY
 {
@@ -110,11 +112,6 @@ int main(int argc, char *argv[])
 	}
 	init();
 
-	// lseek(file_img, 0x100600, SEEK_SET);
-	// char *temp = (char *) malloc(10);
-	// read(file_img, temp, 10);
-	// printf("%s\n", temp);
-	// return 0;
 	while (1)
 	{
 		printf("$ ");
@@ -242,6 +239,21 @@ int main(int argc, char *argv[])
 		else if (strcmp(command, "cp") == 0)
 		{
 			cpFile(tokens);
+		}
+		else if (strcmp(command, "mv") == 0)
+		{
+			if (tokens->size != 3)
+			{
+				printf("ERROR: Invalid number of arguments. Usage: mv <from> <to>\n");
+			}
+			else
+			{
+				mvFile(tokens->items[1], tokens->items[2]);
+			}
+		}
+		else
+		{
+			printf("ERROR: Invalid command\n");
 		}
 
 		free(command);
@@ -511,7 +523,7 @@ void lsName(unsigned long n)
 			printf("\n");
 		}
 		Offset += 32;
-		
+
 		if (Offset > nOffset + BytsPerClus)
 		{
 			//if reach the end of this cluster
@@ -708,7 +720,7 @@ void create(char *FILE)
 				break;
 			}
 			offset += 32;
-			if(offset > nOffset + BytsPerClus)
+			if (offset > nOffset + BytsPerClus)
 			{
 				//if reach the end of this cluster, move to next cluster
 				unsigned int nextClus;
@@ -783,21 +795,35 @@ void mkdir(tokenlist *tokens)
 			newDir.DIR_FileSize = 0;
 
 			struct DIRENTRY temp;
-			unsigned int offSet;
-			offSet = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
-
-			while (1)
+			unsigned int offset;
+			offset = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+			unsigned int nOffset = offset;
+			unsigned int n = curr_clust;
+			while (offset < 0xFFFFFF8)
 			{
 
-				lseek(file_img, offSet, SEEK_SET);
+				lseek(file_img, offset, SEEK_SET);
 				read(file_img, &temp, 32);
 				if (temp.DIR_Name[0] == 0x0)
 				{
-					lseek(file_img, offSet, SEEK_SET);
+					lseek(file_img, offset, SEEK_SET);
 					int a = write(file_img, &newDir, 32);
 					break;
 				}
-				offSet += 32;
+				offset += 32;
+
+				if (offset > nOffset + BytsPerClus)
+				{
+					//if reach the end of this cluster, move to next cluster
+					unsigned int nextClus;
+					unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + n * 4;
+					lseek(file_img, fatOffset, SEEK_SET);
+					read(file_img, &nextClus, 4);
+					n = nextClus;
+					//printf("Next clust is %d\n", n);
+					offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
+					nOffset = offset;
+				}
 			}
 
 			struct DIRENTRY pareDir;
@@ -814,12 +840,13 @@ void mkdir(tokenlist *tokens)
 			pareDir.DIR_FstClusLO = 0xFFFF & curr_clust;
 			pareDir.DIR_FileSize = 0;
 			//add parent entry
-			offSet = BPB_BytsPerSec * (FirstDataSector + (emptClus - 2) * BPB_SecPerClus);
-			lseek(file_img, offSet, SEEK_SET);
-			write(file_img, &pareDir, 32);
+			offset = BPB_BytsPerSec * (FirstDataSector + (emptClus - 2) * BPB_SecPerClus);
+			lseek(file_img, offset, SEEK_SET);
 			//add current dir entry
 			strncpy(temp.DIR_Name, ".           ", 11);
 			write(file_img, &temp, 32);
+			write(file_img, &pareDir, 32);
+
 			//add empty dir entry
 			struct DIRENTRY emptEntry;
 			emptEntry.DIR_Name[0] = 0x0;
@@ -1527,5 +1554,122 @@ void cpFile(tokenlist *tokens)
 	openFile(tokens->items[2], "w");
 	writeFile(tokens->items[2], file.DIR_FileSize, writeString);
 	closeFile(tokens->items[2]);
+}
 
+void mvFile(char *FILE, char *dest)
+{
+	//get starting offset of current working directory
+	unsigned int curr_offset = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+
+	struct DIRENTRY src = pathSearch(FILE);
+	//store starting offset of file dir entry
+	unsigned int src_offset = lseek(file_img, 0, SEEK_CUR) - 32;
+	//get dest file
+	struct DIRENTRY destFile = pathSearch(dest);
+
+	if (src.DIR_Name[0] == 0x0)
+	{
+		printf("ERROR: File not exits\n");
+		return;
+	}
+	else if (destFile.DIR_Name[0] != 0 && destFile.DIR_Attr != 0x10)
+	{
+		printf("ERROR: The name is already being used by anohter file\n");
+		return;
+	}
+	else if (src.DIR_Attr == 0x10)
+	{
+		printf("ERROR: Cannot move directory: invalid destination argument\n");
+		return;
+	}
+	else if (destFile.DIR_Attr == 0x10)
+	{
+		//move to  directory
+		unsigned int sourceClust = curr_clust;
+		curr_clust = destFile.DIR_FstClusHI << 16;
+		curr_clust += destFile.DIR_FstClusLO;
+		create(FILE);
+		struct DIRENTRY temp = pathSearch(FILE);
+		//store start offset of dest direntry
+		unsigned int dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;
+		temp = src;
+		lseek(file_img, dest_offset, SEEK_SET);
+		write(file_img, &temp, sizeof(struct DIRENTRY));
+		//change back to src dir
+		curr_offset = sourceClust;
+		//remove src file entry
+		int last = isLastEntry(src_offset, curr_offset);
+		if (last == 1)
+		{
+			src.DIR_Name[0] = 0x0;
+		}
+		else
+		{
+			src.DIR_Name[0] = 0xe5;
+		}
+		lseek(file_img, src_offset, SEEK_SET);
+		write(file_img, &src, 32);
+		curr_clust = sourceClust;
+	}
+	else if (destFile.DIR_Name[0] == 0)
+	{
+		//update file name
+
+		for (int i = 0; i < strlen(dest); i++)
+		{
+			src.DIR_Name[i] = toupper(dest[i]);
+			printf("%c", toupper(dest[i]));
+		}
+		for (int i = strlen(dest); i < 11; i++)
+		{
+			src.DIR_Name[i] = ' ';
+		}
+		printf("file name after update is %s\n", src.DIR_Name);
+		printf("src offset is %x\n", src_offset);
+		lseek(file_img, src_offset, SEEK_SET);
+		int flag = write(file_img, &src, 32);
+		printf("write %d\n", flag);
+	}
+}
+
+int isLastEntry(unsigned int src_offset, unsigned int curr_offset)
+{
+	//find next dir entry, if next dir in the curr clust
+	if ((src_offset + 32) < curr_offset + BytsPerClus)
+	{
+		printf("Next entry in the same clust\n");
+		lseek(file_img, src_offset + 32, SEEK_SET);
+		struct DIRENTRY nextDir;
+		read(file_img, &nextDir, sizeof(struct DIRENTRY));
+		if (nextDir.DIR_Name[0] != 0)
+		{
+			return 0;
+		}
+		else
+		{
+			return 1;
+		}
+	}
+	else
+	{
+		//find the clust that contains next dir entry
+		unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + curr_clust * 4;
+		lseek(file_img, fatOffset, SEEK_SET);
+		unsigned int nextDir_clust;
+		read(file_img, &nextDir_clust, 4);
+		//get offset of next dir entry
+		unsigned int nextDir_offset = BPB_BytsPerSec * (FirstDataSector + (nextDir_clust - 2) * BPB_SecPerClus);
+		lseek(file_img, nextDir_offset, SEEK_SET);
+		struct DIRENTRY nextDir;
+		//read next dir entry
+		read(file_img, &nextDir, sizeof(struct DIRENTRY));
+		if (nextDir.DIR_Name[0] != 0)
+		{
+			return 0;
+		}
+		else
+		{
+			return 1;
+		}
+	}
 }
