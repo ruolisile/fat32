@@ -43,6 +43,10 @@ by Liting Zhang </br>
 Create new directory. </br>
 Usage `mkdir <directory>` </br>
 
+### mv
+By Liting Zhang </br>
+Usage `mv <from> <to>`. Move a file named `<from>` to directory `<to>` or change the file name `<from>` to `<to>`</br>
+No working for parent directory `..` yet. </br>
 ### open
 by Liting Zhang </br>
 Open a file. </br>
@@ -67,3 +71,18 @@ Usage `read <file> <size>`
 by Liting Zhang </br>
 Write text to an open file given text and size of the text.</br>
 Usage `write <file> <size> <"string">`. Text to be written into a file should be inside qutation mark. 
+
+### rm
+by Liting Zhang</br>
+Usage `mv <file>`.</br>
+Deletes the file named `file` from the current working directory. </br>
+
+### cp
+by Liting Zhang </br>
+Usage `cp <file> <to>`. </br>
+Copy `file` to directory `to` or file `to`.</br>
+Not working for parent directory `..` yet. </br>
+
+## Known Errors and Bugs
+Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br>
+`cp` and `mv` is not working for `..` as mentioned above. </br>
