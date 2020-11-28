@@ -46,7 +46,7 @@ Usage `mkdir <directory>` </br>
 ### mv
 By Liting Zhang </br>
 Usage `mv <from> <to>`. Move a file named `<from>` to directory `<to>` or change the file name `<from>` to `<to>`</br>
-No working for parent directory `..` yet. </br>
+
 ### open
 by Liting Zhang </br>
 Open a file. </br>
