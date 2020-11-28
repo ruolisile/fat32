@@ -80,9 +80,9 @@ Deletes the file named `file` from the current working directory. </br>
 ### cp
 by Liting Zhang </br>
 Usage `cp <file> <to>`. </br>
-Copy `file` to directory `to` or file `to`.</br>
-Not working for parent directory `..` yet. </br>
+Copy `file` to directory `to` or file `to`. File `to` will be overwrriten or created.</br>
+
 
 ## Known Errors and Bugs
 Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br>
-`cp` and `mv` is not working for `..` as mentioned above. </br>
+cd is not working for `..` as mentioned above. 
