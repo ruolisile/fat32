@@ -568,7 +568,7 @@ struct DIRENTRY pathSearch(char *path)
 	while (tempDir.DIR_Name[0] != 0x0 && Offset < 0xFFFFFF8)
 	{
 		char name[12];
-		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0 && tempDir.DIR_Name[0] != 0x2E)
+		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0 )
 		{
 			int j;
 			for (j = 0; j < 11; j++)
@@ -844,6 +844,7 @@ void mkdir(tokenlist *tokens)
 			lseek(file_img, offset, SEEK_SET);
 			//add current dir entry
 			strncpy(temp.DIR_Name, ".           ", 11);
+			temp.DIR_Attr = 0x10;
 			write(file_img, &temp, 32);
 			write(file_img, &pareDir, 32);
 
@@ -1477,7 +1478,8 @@ void cpFile(tokenlist *tokens)
 		printf("ERROR: Too few arguments. Usage： rm <file>\n");
 		return;
 	}
-
+	char *FILE = tokens->items[1];
+	char *dest = tokens->items[2];
 	struct DIRENTRY file = pathSearch(tokens->items[1]);
 
 	if (file.DIR_Name[0] == 0x0)
@@ -1485,7 +1487,7 @@ void cpFile(tokenlist *tokens)
 		printf("ERROR: File not exits\n");
 		return;
 	}
-	else if (file.DIR_Attr == 0X10)
+	else if (file.DIR_Attr == 0x10)
 	{
 		printf("ERROR: Cannot copy a directory\n");
 		return;
@@ -1499,22 +1501,22 @@ void cpFile(tokenlist *tokens)
 		return;
 	}
 	//check if the dest exists
-	struct DIRENTRY dest = pathSearch(tokens->items[2]);
+	struct DIRENTRY destDir = pathSearch(tokens->items[2]);
 	int flag = 0;
 	if (strcmp(tokens->items[1], tokens->items[2]) == 0)
 	{
 		flag = 0; //cp to the same file, does nothing
 		return;
 	}
-	else if (dest.DIR_Attr == 0x10)
+	else if (destDir.DIR_Attr == 0x10)
 	{
 		flag = 1; //cp to a directory
 	}
-	else if (dest.DIR_Name[0] != 0)
+	else if (destDir.DIR_Name[0] != 0)
 	{
 		flag = 2; //overwrite the existing file
 	}
-	else if (dest.DIR_Name[0] == 0)
+	else if (destDir.DIR_Name[0] == 0)
 	{
 		flag = 3; //cp to a new file
 	}
@@ -1530,10 +1532,38 @@ void cpFile(tokenlist *tokens)
 
 	if (flag == 1)
 	{
-		unsigned int destClust = dest.DIR_FstClusHI << 16;
-		destClust += dest.DIR_FstClusLO;
-		//cd to destClust
-		curr_clust = destClust;
+		if (strcmp(tokens->items[2], "..") == 0)
+		{
+			curr_clust = pare_clust;
+		}
+		else
+		{
+			unsigned int destClust = destDir.DIR_FstClusHI << 16;
+			destClust += destDir.DIR_FstClusLO;
+			//cd to destClust
+			curr_clust = destClust;
+		}
+
+		struct DIRENTRY tempDir = pathSearch(tokens->items[1]);
+		if(tempDir.DIR_Attr == 0x10)
+		{
+			printf("ERROR: Cannot overwrite a directory ../%s\n", tokens->items[1]);
+			curr_clust = sourceClust;
+			return;
+		}
+		if(tempDir.DIR_Name[0] != 0)
+		{
+			//file already exits, remove it before overwrite
+			//check if dest file is open, close it before overwriting
+			unsigned int destClust = tempDir.DIR_FstClusHI << 16;
+			destClust += tempDir.DIR_FstClusLO;
+			struct openFile *destOpen = isFileOpened(destClust, FILE);
+			if(destOpen != NULL)
+			{
+				closeFile(FILE);
+			}
+			rmFile(FILE);
+		}
 		create(tokens->items[1]);
 		printf("create cp file\n");
 		//open dest file and write
@@ -1564,12 +1594,20 @@ void mvFile(char *FILE, char *dest)
 	struct DIRENTRY src = pathSearch(FILE);
 	//store starting offset of file dir entry
 	unsigned int src_offset = lseek(file_img, 0, SEEK_CUR) - 32;
+
 	//get dest file
 	struct DIRENTRY destFile = pathSearch(dest);
-
 	if (src.DIR_Name[0] == 0x0)
 	{
 		printf("ERROR: File not exits\n");
+		return;
+	}
+	//get first data clust of source
+	unsigned int clust = src.DIR_FstClusHI << 16;
+	clust += src.DIR_FstClusLO;
+	if(isFileOpened(clust, FILE))
+	{
+		printf("ERROR: %s is open, please close it before moving\n", FILE);
 		return;
 	}
 	else if (destFile.DIR_Name[0] != 0 && destFile.DIR_Attr != 0x10)
@@ -1579,22 +1617,60 @@ void mvFile(char *FILE, char *dest)
 	}
 	else if (src.DIR_Attr == 0x10)
 	{
-		printf("ERROR: Cannot move directory: invalid destination argument\n");
+		printf("ERROR: Cannot move directory: Invalid destination argument\n");
 		return;
 	}
-	else if (destFile.DIR_Attr == 0x10)
+	else if (strcmp(dest, ".") == 0)
+	{
+		printf("ERROR: %s and ./%s are the same file\n", FILE, FILE);
+		return;
+	}
+	else if(strcmp(dest, "..") == 0 && curr_clust == BPB_RootClus)
+	{
+		printf("ERROR: Already in the root directory. Cannot move to parent directory\n");
+	}
+	else if (destFile.DIR_Attr == 0x10 )
 	{
 		//move to  directory
 		unsigned int sourceClust = curr_clust;
-		curr_clust = destFile.DIR_FstClusHI << 16;
-		curr_clust += destFile.DIR_FstClusLO;
-		create(FILE);
-		struct DIRENTRY temp = pathSearch(FILE);
+		if(strcmp(dest, "..") == 0)
+		{
+			curr_clust = pare_clust;
+		}
+		else
+		{
+			curr_clust = destFile.DIR_FstClusHI << 16;
+			curr_clust += destFile.DIR_FstClusLO;	
+		}
+		
+		printf("curr clust is %d\n", curr_clust);
+		
+		struct DIRENTRY tempDir = pathSearch(FILE);
 		//store start offset of dest direntry
 		unsigned int dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;
-		temp = src;
+		if(tempDir.DIR_Attr == 0x10)
+		{
+			printf("ERROR: Cannot overwrite a directory ../%s\n", FILE);
+			curr_clust = sourceClust;
+			return;
+		}
+		if (tempDir.DIR_Name[0] != 0)
+		{
+			unsigned int destClust = tempDir.DIR_FstClusHI << 16;
+			destClust += tempDir.DIR_FstClusLO;
+			struct openFile *destOpen = isFileOpened(destClust, FILE);
+			if(destOpen != NULL)
+			{
+				closeFile(FILE);
+			}
+			//files already exit, removing it before overwriting
+			rmFile(FILE);
+
+		}
+		create(FILE);		
+		tempDir = src;
 		lseek(file_img, dest_offset, SEEK_SET);
-		write(file_img, &temp, sizeof(struct DIRENTRY));
+		write(file_img, &tempDir, sizeof(struct DIRENTRY));
 		//change back to src dir
 		curr_offset = sourceClust;
 		//remove src file entry
