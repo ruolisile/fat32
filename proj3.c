@@ -731,6 +731,7 @@ void create(char *FILE)
 			if (temp.DIR_Name[0] == 0x0 | temp.DIR_Name[0] == 0xe5)
 			{
 				lseek(file_img, offset, SEEK_SET);
+				printf("created offset is %x\n", offset);
 				int a = write(file_img, &newFile, 32);
 				break;
 			}
@@ -1602,7 +1603,6 @@ void cpFile(tokenlist *tokens)
 	writeFile(tokens->items[2], file.DIR_FileSize, writeString);
 	closeFile(tokens->items[2]);
 }
-
 void mvFile(char *FILE, char *dest)
 {
 	//get starting offset of current working directory
@@ -1616,7 +1616,7 @@ void mvFile(char *FILE, char *dest)
 	struct DIRENTRY destFile = pathSearch(dest);
 	if (src.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File does not exist\n");
+		printf("ERROR: File not exits\n");
 		return;
 	}
 	//get first data clust of source
@@ -1629,7 +1629,7 @@ void mvFile(char *FILE, char *dest)
 	}
 	else if (destFile.DIR_Name[0] != 0 && destFile.DIR_Attr != 0x10)
 	{
-		printf("ERROR: The name is already being used by another file\n");
+		printf("ERROR: The name is already being used by anohter file\n");
 		return;
 	}
 	else if (src.DIR_Attr == 0x10)
@@ -1645,6 +1645,7 @@ void mvFile(char *FILE, char *dest)
 	else if(strcmp(dest, "..") == 0 && curr_clust == BPB_RootClus)
 	{
 		printf("ERROR: Already in the root directory. Cannot move to parent directory\n");
+		return;
 	}
 	else if (destFile.DIR_Attr == 0x10 )
 	{
@@ -1652,13 +1653,10 @@ void mvFile(char *FILE, char *dest)
 		unsigned int sourceClust = curr_clust;
 		if(strcmp(dest, "..") == 0)
 		{
-			int temp = dpIndex - 1;
-			curr_clust = directoryPath[temp];
-//			curr_clust = pare_clust;
+			curr_clust = pare_clust;
 		}
 		else
 		{
-			directoryPath[dpIndex++] = curr_clust;
 			curr_clust = destFile.DIR_FstClusHI << 16;
 			curr_clust += destFile.DIR_FstClusLO;	
 		}
@@ -1668,15 +1666,17 @@ void mvFile(char *FILE, char *dest)
 		struct DIRENTRY tempDir = pathSearch(FILE);
 		//store start offset of dest direntry
 		unsigned int dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;
+		printf("current offset is %x\n", dest_offset);
 		if(tempDir.DIR_Attr == 0x10)
 		{
 			printf("ERROR: Cannot overwrite a directory ../%s\n", FILE);
 			curr_clust = sourceClust;
 			return;
 		}
+		
 		if (tempDir.DIR_Name[0] != 0)
 		{
-			printf("in func\n");
+			//files already exit, removing it before overwriting
 			unsigned int destClust = tempDir.DIR_FstClusHI << 16;
 			destClust += tempDir.DIR_FstClusLO;
 			struct openFile *destOpen = isFileOpened(destClust, FILE);
@@ -1684,25 +1684,29 @@ void mvFile(char *FILE, char *dest)
 			{
 				closeFile(FILE);
 			}
-			//files already exit, removing it before overwriting
+			rmFile(FILE);
+			//write on the removed dir entry
+			lseek(file_img, dest_offset, SEEK_SET);
+			write(file_img, &src, sizeof(struct DIRENTRY));
+
+		}
+		else 
+		{
+			//file not exits 
+			create(FILE);
+			printf("crated mv file direntry\n");
+			
+			tempDir = pathSearch(FILE);	
+			dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;	
+			printf("dest offset is %x\n", dest_offset);
+			tempDir = src;
+			lseek(file_img, dest_offset, SEEK_SET);
+			write(file_img, &src, sizeof(struct DIRENTRY));
+
 		}
 
-		//need to remove file here
-		//go back to old directory
-
-		curr_clust = directoryPath[dpIndex - 1];
-		rmFile(FILE);
-		curr_clust = directoryPath[dpIndex];
-
-
-		create(FILE);		
-		tempDir = src;
-		lseek(file_img, dest_offset, SEEK_SET);
-		write(file_img, &tempDir, sizeof(struct DIRENTRY));
 		//change back to src dir
-
-		curr_offset = directoryPath[dpIndex - 1];
-
+		curr_clust = sourceClust;
 		//remove src file entry
 		int last = isLastEntry(src_offset, curr_offset);
 		if (last == 1)
@@ -1713,12 +1717,9 @@ void mvFile(char *FILE, char *dest)
 		{
 			src.DIR_Name[0] = 0xe5;
 		}
-
-//		lseek(file_img, src_offset, SEEK_SET);
-//		write(file_img, &src, 32);
-		curr_clust = directoryPath[dpIndex - 1];
-
-
+		lseek(file_img, src_offset, SEEK_SET);
+		write(file_img, &src, 32);
+		curr_clust = sourceClust;
 	}
 	else if (destFile.DIR_Name[0] == 0)
 	{
@@ -1740,6 +1741,7 @@ void mvFile(char *FILE, char *dest)
 		printf("write %d\n", flag);
 	}
 }
+
 
 int isLastEntry(unsigned int src_offset, unsigned int curr_offset)
 {
