@@ -49,6 +49,8 @@ void rmFile(char *FILE);
 void cpFile(tokenlist *tokens);
 void mvFile(char *FILE, char *dest);
 int isLastEntry(unsigned int src_offset, unsigned int curr_offset);
+void rmDir(char *FILE);
+
 //DIR entry
 struct DIRENTRY
 {
@@ -96,11 +98,14 @@ int root;		 //root dir
 int curr_clust;	 //first clust for current dir
 int pare_clust;	 //first clust for paraent cluster
 
+int directoryPath[512]; //stores cluster numbers for cd .. traversal, arbitrary long number chosen
+int dpIndex = 0; //indexing for directoryPath array
+
 int main(int argc, char *argv[])
 {
 	if (argc != 2)
 	{
-		printf("Incorrect arguments; Usage: project3.o FILE_SYSTEM_IMAGE\n");
+		printf("Incorrect arguments; Usage: ./project3 FILE_SYSTEM_IMAGE\n");
 		return 1;
 	}
 	//open disk image
@@ -200,7 +205,7 @@ int main(int argc, char *argv[])
 		{
 			if (tokens->size != 3)
 			{
-				printf("ERROR: Inconrrect number of arguments. Usage: read <file> <size>\n");
+				printf("ERROR: Incorrect number of arguments. Usage: read <file> <size>\n");
 			}
 			else
 			{
@@ -250,6 +255,9 @@ int main(int argc, char *argv[])
 			{
 				mvFile(tokens->items[1], tokens->items[2]);
 			}
+		}
+		else if (strcmp(command, "rmdir") == 0){
+			rmDir(tokens->items[1]);
 		}
 		else
 		{
@@ -468,7 +476,8 @@ void ls(tokenlist *tokens)
 			}
 			else
 			{
-				n = pare_clust;
+				int temp = dpIndex - 1;
+				n = directoryPath[temp];
 				lsName(n);
 			}
 		}
@@ -641,6 +650,9 @@ void cd(tokenlist *tokens)
 		if (curr_clust == BPB_RootClus)
 		{
 			printf("ERROR: Already in root directory\n");
+		} else {
+			dpIndex--;
+			curr_clust = directoryPath[dpIndex];
 		}
 	}
 	else
@@ -656,6 +668,9 @@ void cd(tokenlist *tokens)
 		}
 		else
 		{
+			directoryPath[dpIndex] = curr_clust;
+			dpIndex++;
+
 			pare_clust = curr_clust;
 			curr_clust = tempDir.DIR_FstClusHI << 16;
 			curr_clust += tempDir.DIR_FstClusLO;
@@ -863,12 +878,12 @@ void openFile(char *FILE, char *mode)
 	struct DIRENTRY file = pathSearch(FILE);
 	if (file.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File not exits\n");
+		printf("ERROR: File not exist\n");
 	}
 	else if (file.DIR_Attr & 0x10)
 	{
 
-		printf("ERROR: %s is a direcotry. Cannot open a directory\n", FILE);
+		printf("ERROR: %s is a directory. Cannot open a directory\n", FILE);
 	}
 	else if (strcmp(mode, "rw") != 0 && strcmp(mode, "w") != 0 &&
 			 strcmp(mode, "wr") != 0 && strcmp(mode, "r") != 0)
@@ -888,7 +903,7 @@ void openFile(char *FILE, char *mode)
 		unsigned int offSet = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 		if (isFileOpened(clust, FILE) != NULL)
 		{
-			printf("ERROR: Fill already open\n");
+			printf("ERROR: File is already open\n");
 		}
 		else
 		{
@@ -951,12 +966,12 @@ void closeFile(char *FILE)
 	struct DIRENTRY file = pathSearch(FILE);
 	if (file.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File not exits\n");
+		printf("ERROR: File does not exist\n");
 	}
 	else if (file.DIR_Attr & 0x10)
 	{
 
-		printf("ERROR: %s is a direcotry. Cannot open a directory\n", FILE);
+		printf("ERROR: %s is a directory. Cannot open a directory\n", FILE);
 	}
 	else
 	{
@@ -964,7 +979,7 @@ void closeFile(char *FILE)
 		clust += file.DIR_FstClusLO;
 		if (isFileOpened(clust, FILE) == NULL)
 		{
-			printf("ERROR: Fill is not open\n");
+			printf("ERROR: File is not open\n");
 		}
 		else
 		{
@@ -1018,7 +1033,7 @@ void lseekFile(tokenlist *tokens)
 		struct DIRENTRY file = pathSearch(tokens->items[1]);
 		if (file.DIR_Name[0] == 0x0)
 		{
-			printf("ERROR: File not exits\n");
+			printf("ERROR: File does not exist\n");
 		}
 		else
 		{
@@ -1034,7 +1049,7 @@ void lseekFile(tokenlist *tokens)
 				unsigned int offset = strtoul(tokens->items[2], NULL, 10);
 				if (offset > size(tokens))
 				{
-					printf("ERROR: Offset cannot greater than file size. \n");
+					printf("ERROR: Offset cannot be greater than file size. \n");
 				}
 				else
 				{
@@ -1050,7 +1065,7 @@ char *readFile(char *FILE, unsigned int readBytes)
 	struct DIRENTRY file = pathSearch(FILE);
 	if (file.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File not exits\n");
+		printf("ERROR: File not exist\n");
 		return NULL;
 	}
 	else if (file.DIR_Attr == 0X10)
@@ -1160,7 +1175,7 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 	struct DIRENTRY file = pathSearch(FILE);
 	if (file.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File not exits\n");
+		printf("ERROR: File does not exist\n");
 		return;
 	}
 	else if (file.DIR_Attr == 0X10)
@@ -1385,7 +1400,7 @@ void rmFile(char *FILE)
 
 	if (file.DIR_Name[0] == 0x0)
 	{
-		printf("ERROR: File not exits\n");
+		printf("ERROR: File does not exist\n");
 		return;
 	}
 	else if (file.DIR_Attr == 0X10)
@@ -1405,7 +1420,7 @@ void rmFile(char *FILE)
 	struct openFile *temp = isFileOpened(clust, FILE);
 	if (temp != NULL)
 	{
-		printf("ERROR: File is open. Please close the file before remove.\n");
+		printf("ERROR: File is open. Please close the file before attempting to remove.\n");
 		return;
 	}
 	unsigned int nextClust = updateClust(clust);
@@ -1535,7 +1550,9 @@ void cpFile(tokenlist *tokens)
 	{
 		if (strcmp(tokens->items[2], "..") == 0)
 		{
-			curr_clust = pare_clust;
+			int temp = dpIndex - 1;
+			curr_clust = directoryPath[temp];
+//			curr_clust = pare_clust;
 		}
 		else
 		{
@@ -1586,7 +1603,6 @@ void cpFile(tokenlist *tokens)
 	writeFile(tokens->items[2], file.DIR_FileSize, writeString);
 	closeFile(tokens->items[2]);
 }
-
 void mvFile(char *FILE, char *dest)
 {
 	//get starting offset of current working directory
@@ -1726,6 +1742,7 @@ void mvFile(char *FILE, char *dest)
 	}
 }
 
+
 int isLastEntry(unsigned int src_offset, unsigned int curr_offset)
 {
 	//find next dir entry, if next dir in the curr clust
@@ -1766,4 +1783,81 @@ int isLastEntry(unsigned int src_offset, unsigned int curr_offset)
 			return 1;
 		}
 	}
+}
+
+void rmDir(char * FILE){
+
+	struct DIRENTRY file = pathSearch(FILE);
+
+	if (file.DIR_Attr != 0X10)
+	{
+		printf("ERROR: %s is not a directory\n", FILE);
+		return;
+	}
+	else if (file.DIR_Name[0] == 0x0)
+	{
+		printf("ERROR: Directory does not exist\n");
+		return;
+	}
+
+	//needs error checking for if directory is not empty
+
+
+	unsigned int dirEntry_offset = lseek(file_img, 0, SEEK_CUR) - 32;
+	unsigned int curr_offset = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
+
+	unsigned int cluster = file.DIR_FstClusHI << 16;
+	cluster += file.DIR_FstClusLO;
+
+	unsigned int next = updateClust(cluster);
+
+	unsigned int numClust = file.DIR_FileSize / BytsPerClus;
+	if (file.DIR_FileSize % BytsPerClus > 0)
+	{
+		numClust++;
+	}
+
+	for (int i = 0; i < numClust; i++)
+	{
+		unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + cluster * 4;
+		lseek(file_img, fatOffset, SEEK_SET);
+		unsigned int emptyClus = 0x0;
+		int flag = write(file_img, &emptyClus, 4);
+		cluster = next;
+		next = updateClust(cluster);
+	}
+
+	if ((dirEntry_offset + 32) < curr_offset + BytsPerClus)
+	{
+		lseek(file_img, dirEntry_offset + 32, SEEK_SET);
+		struct DIRENTRY nextDir;
+		read(file_img, &nextDir, sizeof(struct DIRENTRY));
+		switch(nextDir.DIR_Name[0]){
+			case 0: file.DIR_Name[0] = 0x0; break;
+			default: file.DIR_Name[0] = 0xe5; break;
+
+		}
+	}
+	else
+	{
+		unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + curr_clust * 4;
+		lseek(file_img, fatOffset, SEEK_SET);
+		
+		unsigned int nextDir_clust;
+		read(file_img, &nextDir_clust, 4);
+		
+		unsigned int nextDir_offset = BPB_BytsPerSec * (FirstDataSector + (nextDir_clust - 2) * BPB_SecPerClus);
+		lseek(file_img, nextDir_offset, SEEK_SET);
+		
+		struct DIRENTRY nextDir;
+		read(file_img, &nextDir, sizeof(struct DIRENTRY));
+
+		switch(nextDir.DIR_Name[0]){
+			case 0: file.DIR_Name[0] = 0x0; break;
+			default: file.DIR_Name[0] = 0xe5; break;
+		}
+	}
+
+	lseek(file_img, dirEntry_offset, SEEK_SET);
+	write(file_img, &file, sizeof(struct DIRENTRY));
 }

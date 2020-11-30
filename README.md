@@ -22,16 +22,15 @@ Print the size of the given file. </br>
 Usage `size <file>` </br>
 
 ### ls
-by Liting Zhang </br>
+by Liting Zhang and Amanda Lovett</br>
 list the file in the given directory </br>
 Usage `ls <dir>` </br>
 
 ### cd  
-by Liting Zhang </br>
+by Liting Zhang and Amanda Lovett</br>
 Change the working directory to the given directory. </br>
 Usage `cd <directory>` </br>
 If `<directory>` is not specify, change working directory to root. </br>
-Not able to change back to parent directory by using `..`. Will make it work if time allows. </br>
 
 ### create
 by Liting Zhang </br>
@@ -44,8 +43,9 @@ Create new directory. </br>
 Usage `mkdir <directory>` </br>
 
 ### mv
-By Liting Zhang </br>
+By Liting Zhang and Amanda Lovett</br>
 Usage `mv <from> <to>`. Move a file named `<from>` to directory `<to>` or change the file name `<from>` to `<to>`</br>
+mv for file into directory may be buggy</br>
 
 ### open
 by Liting Zhang </br>
@@ -82,7 +82,11 @@ by Liting Zhang </br>
 Usage `cp <file> <to>`. </br>
 Copy `file` to directory `to` or file `to`. File `to` will be overwrriten or created.</br>
 
+### rmdir
+by Amanda Lovett </br>
+Useage `rmdir <directory>`. </br>
+Removes a directory `directory`. </br>
+Currently does not check if directory is empty. </br>
 
 ## Known Errors and Bugs
-Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br>
-cd is not working for `..` as mentioned above. 
+Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br> 
