@@ -50,6 +50,7 @@ void cpFile(tokenlist *tokens);
 void mvFile(char *FILE, char *dest);
 int isLastEntry(unsigned int src_offset, unsigned int curr_offset);
 void rmDir(char *FILE);
+int isEmpty(struct DIRENTRY file);
 
 //DIR entry
 struct DIRENTRY
@@ -1800,8 +1801,16 @@ void rmDir(char * FILE){
 		return;
 	}
 
-	//needs error checking for if directory is not empty
+	//checks if directory is empty 
 
+	else if (isEmpty(file) == 1){
+		printf("ERROR: Directory is not empty\n");
+		return;
+	}
+
+	//end error checking
+
+	file = pathSearch(FILE);
 
 	unsigned int dirEntry_offset = lseek(file_img, 0, SEEK_CUR) - 32;
 	unsigned int curr_offset = BPB_BytsPerSec * (FirstDataSector + (curr_clust - 2) * BPB_SecPerClus);
@@ -1860,4 +1869,55 @@ void rmDir(char * FILE){
 
 	lseek(file_img, dirEntry_offset, SEEK_SET);
 	write(file_img, &file, sizeof(struct DIRENTRY));
+}
+
+int isEmpty(struct DIRENTRY file){
+
+	unsigned long temp = file.DIR_FstClusHI << 16;
+	temp += file.DIR_FstClusLO;
+
+	unsigned int Offset;
+	struct DIRENTRY tempDir;
+
+	Offset = BPB_BytsPerSec * (FirstDataSector + (temp - 2) * BPB_SecPerClus);
+	unsigned int tempOffset = Offset;
+
+	lseek(file_img, Offset, SEEK_SET);
+	read(file_img, &tempDir, 32);
+
+	int empty = 0;
+
+	while (tempDir.DIR_Name[0] != 0x0 && Offset <= 0xFFFFFF8)
+	{
+
+		if (tempDir.DIR_Attr != 0xF && tempDir.DIR_Name[0] != 0x0 && tempDir.DIR_Name[0] != 0xe5)
+		{
+			int j;
+			for (j = 0; j < 11; j++)
+			{
+
+				if (tempDir.DIR_Name[j] != ' ' && tempDir.DIR_Name[j] != '.'){
+					empty = 1;
+				}
+			}
+		}
+		Offset += 32;
+
+		//check next cluster
+		if (Offset > tempOffset + BytsPerClus)
+		{
+			unsigned int nextClus;
+			unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + temp * 4;
+			lseek(file_img, fatOffset, SEEK_SET);
+			read(file_img, &nextClus, 4);
+			temp = nextClus;
+			Offset = BPB_BytsPerSec * (FirstDataSector + (temp - 2) * BPB_SecPerClus);
+			tempOffset = Offset;
+		}
+
+		lseek(file_img, Offset, SEEK_SET);
+		read(file_img, &tempDir, 32);
+	}
+
+	return empty;
 }
