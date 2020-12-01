@@ -1,5 +1,7 @@
 # COP4610-Proj3
-This project implement FAT32 file system </br>
+This project implements a FAT32 file system. </br>
+Code authors are properly credited within their appropriate functions. </br>
+
 ## Build
 `make` </br>
 ## Usage
@@ -85,8 +87,8 @@ Copy `file` to directory `to` or file `to`. File `to` will be overwrriten or cre
 ### rmdir
 by Amanda Lovett </br>
 Useage `rmdir <directory>`. </br>
-Removes a directory `directory`. </br>
-Currently does not check if directory is empty. </br>
+Removes an empty directory `directory`. </br>
 
 ## Known Errors and Bugs
 Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br> 
+Bug testing and code review by Amanda Lovett and Liting Zhang.</br>
