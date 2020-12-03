@@ -180,6 +180,7 @@ int main(int argc, char *argv[])
 			else
 			{
 				openFile(tokens->items[1], tokens->items[2]);
+				printf("Open file in %s mode\n", tokens->items[2]);
 			}
 		}
 		else if (strcmp(command, "close") == 0)
@@ -732,7 +733,6 @@ void create(char *FILE)
 			if (temp.DIR_Name[0] == 0x0 | temp.DIR_Name[0] == 0xe5)
 			{
 				lseek(file_img, offset, SEEK_SET);
-				printf("created offset is %x\n", offset);
 				int a = write(file_img, &newFile, 32);
 				break;
 			}
@@ -745,7 +745,6 @@ void create(char *FILE)
 				lseek(file_img, fatOffset, SEEK_SET);
 				read(file_img, &nextClus, 4);
 				n = nextClus;
-				//printf("Next clust is %d\n", n);
 				offset = BPB_BytsPerSec * (FirstDataSector + (n - 2) * BPB_SecPerClus);
 				nOffset = offset;
 			}
@@ -909,7 +908,7 @@ void openFile(char *FILE, char *mode)
 		else
 		{
 			addOpenFile(clust, FILE, mode);
-			printf("Open %s in %s mode\n", FILE, mode);
+			
 		}
 	}
 }
@@ -1012,7 +1011,7 @@ void removeOpenFile(unsigned int clust, char *FILE)
 		previous->next = current->next;
 	}
 }
-
+//for debuging
 void printlist()
 {
 	struct openFile *ptr = head;
@@ -1140,8 +1139,7 @@ char *readFile(char *FILE, unsigned int readBytes)
 					unsigned char data[BPB_BytsPerSec + 1];
 					int temp = read(file_img, &data, BPB_BytsPerSec);
 					data[BPB_BytsPerSec] = '\0';
-					// 	printf("%s", data);
-
+		
 					strcat(outputString, data);
 
 					byteToRead -= BPB_BytsPerSec;
@@ -1202,7 +1200,6 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 		//get starting offset of dir entry of this write file
 		//for later update in size
 		unsigned int dirEntry_offset = lseek(file_img, 0, SEEK_CUR) - 32;
-		printf("%x\n", dirEntry_offset);
 
 		//unsigned int writeBytes = strtoul(tokens->items[2], NULL, 10);
 		unsigned int byteToWrite = writeBytes;
@@ -1210,18 +1207,6 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 		unsigned char string[writeBytes + 2];
 		memset(string, '\0', writeBytes + 2);
 		strcat(string, writeString);
-		// for (int i = 3; i < tokens->size - 1; i++)
-		// {
-		// 	strcat(string, tokens->items[i]);
-		// 	strcat(string, " ");
-		// }
-		// //remove "" at the end of string
-		// unsigned char lastToken[strlen(tokens->items[tokens->size - 1])];
-		// strncpy(lastToken, tokens->items[tokens->size - 1], strlen(tokens->items[tokens->size - 1]));
-		// lastToken[strlen(tokens->items[tokens->size - 1]) - 1] = '\0';
-		// strcat(string, lastToken);
-
-		printf("write string is %s\n ", string);
 
 		//set current clust and offset corespondingly
 		unsigned int tempOffset = temp->offSet;
@@ -1236,11 +1221,11 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 			lseek(file_img, offset, SEEK_SET);
 			tempOffset -= BytsPerClus;
 		}
-		printf("current clus is %d; tempoffset is %d\n", clust, tempOffset);
+
 		//set pointer to correct place
 		unsigned int offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 		lseek(file_img, offset + tempOffset, SEEK_SET);
-		printf("pointer is at %x\n", offset + tempOffset);
+
 		//update file size, and allocate more cluster
 		if (byteToWrite > (file.DIR_FileSize - temp->offSet))
 		{
@@ -1255,13 +1240,13 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 				finalClust++;
 			}
 			unsigned int extraClust = finalClust - currNumClust;
-			printf("Extra clust is %d, current clust is %d\n", extraClust, currNumClust);
+
 			if (extraClust == 0)
 			{
 				//write on current clust is enough
 				writeToFile(string, 0, byteToWrite);
 				byteToWrite -= byteToWrite;
-				printf("pointer is at %x\n", offset + tempOffset);
+
 			}
 			else
 			{
@@ -1276,24 +1261,19 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 					writeToFile(string, 0, byteToWrite);
 					byteToWrite -= byteToWrite;
 				}
-				printf("pointer is at %x\n", offset + tempOffset);
+
 				while (byteToWrite > 0)
 				{ //Allocate new clust
-					//link next clus
-					//lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4, SEEK_SET);
-					//unsigned int test;
-					//read(file_img, &test, 4);
-					//printf("before update %d\n", test);
+
 					unsigned int nextclust;
 					nextclust = updateClust(clust);
-					printf("next clust is %d\n", nextclust);
+
 					//if last clust, allocate new clust
 					if (nextclust >= 0xFFFF08)
 					{
 						nextclust = findEmptyClus();
 						lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4, SEEK_SET);
 						write(file_img, &nextclust, 4);
-						printf("allocate new class %d\n", nextclust);
 
 						unsigned int lastClus = 0xFFFFFFF;
 						lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + nextclust * 4, SEEK_SET);
@@ -1301,12 +1281,7 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 						write(file_img, &lastClus, 4);
 					}
 
-					//printf("empty clust is %d; write \n", nextclust);
 					clust = nextclust; //move to next clust
-					//lseek(file_img, BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4, SEEK_SET);
-
-					//read(file_img, &test, 4);
-					//printf("after update %d\n", test);
 
 					offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 					lseek(file_img, offset, SEEK_SET);
@@ -1341,7 +1316,7 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 				clust = updateClust(clust);
 				offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 				lseek(file_img, offset, SEEK_SET);
-				printf("pointer is at %x\n", offset + tempOffset);
+
 			}
 			else
 			{
@@ -1353,7 +1328,6 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 			while (byteToWrite > 0)
 			{
 				unsigned int startByte = writeBytes - byteToWrite;
-				printf("start byt is %d\n", startByte);
 				if (byteToWrite >= BytsPerClus)
 				{
 					writeToFile(string, startByte, BytsPerClus);
@@ -1362,13 +1336,12 @@ void writeFile(char *FILE, unsigned int writeBytes, char *writeString)
 					clust = updateClust(clust);
 					offset = BPB_BytsPerSec * (FirstDataSector + (clust - 2) * BPB_SecPerClus);
 					lseek(file_img, offset, SEEK_SET);
-					printf("pointer is at %x\n", offset + tempOffset);
 				}
 				else
 				{
 					writeToFile(string, startByte, byteToWrite);
 					byteToWrite -= byteToWrite;
-					printf("pointer is at %x\n", offset + tempOffset);
+
 				}
 			}
 		}
@@ -1391,7 +1364,7 @@ void writeToFile(char *string, unsigned int start, unsigned int size)
 	memset(tempString, '\0', size + 1);
 	strncpy(tempString, string + start, size);
 	int temp = write(file_img, &tempString, size);
-	printf("write %d bytes; %s\n", temp, tempString);
+
 }
 
 void rmFile(char *FILE)
@@ -1417,7 +1390,7 @@ void rmFile(char *FILE)
 	//get the first clust of the file content
 	unsigned int clust = file.DIR_FstClusHI << 16;
 	clust += file.DIR_FstClusLO;
-	printf("Dir offset is %x, clust is %d\n", dirEntry_offset, clust);
+
 	struct openFile *temp = isFileOpened(clust, FILE);
 	if (temp != NULL)
 	{
@@ -1435,7 +1408,7 @@ void rmFile(char *FILE)
 	{
 		unsigned int fatOffset = BPB_RsvdSecCnt * BPB_BytsPerSec + clust * 4;
 		lseek(file_img, fatOffset, SEEK_SET);
-		printf("fat offset is %x\n", fatOffset);
+
 		unsigned int emptyClus = 0x0;
 		int flag = write(file_img, &emptyClus, 4);
 		clust = nextClust;
@@ -1445,18 +1418,17 @@ void rmFile(char *FILE)
 	//find next dir entry, if next dir in the curr clust
 	if ((dirEntry_offset + 32) < curr_offset + BytsPerClus)
 	{
-		printf("Next entry in the same clust\n");
+
 		lseek(file_img, dirEntry_offset + 32, SEEK_SET);
 		struct DIRENTRY nextDir;
 		read(file_img, &nextDir, sizeof(struct DIRENTRY));
 		if (nextDir.DIR_Name[0] != 0)
 		{
-			printf("Deleted file is not the last entry\n");
 			file.DIR_Name[0] = 0xe5;
 		}
 		else
 		{
-			printf("Deleted file is the last entry\n");
+
 			file.DIR_Name[0] = 0x0;
 		}
 	}
@@ -1538,7 +1510,7 @@ void cpFile(tokenlist *tokens)
 		flag = 3; //cp to a new file
 	}
 	unsigned int sourceClust = curr_clust;
-	printf("flag is %d\n", flag);
+
 	//open source for reading
 	openFile(tokens->items[1], "r");
 	char *writeString = (char *)malloc(file.DIR_FileSize + 1);
@@ -1584,10 +1556,9 @@ void cpFile(tokenlist *tokens)
 			rmFile(FILE);
 		}
 		create(tokens->items[1]);
-		printf("create cp file\n");
+
 		//open dest file and write
 		openFile(tokens->items[1], "w");
-		printf("open\n");
 		writeFile(tokens->items[1], file.DIR_FileSize, writeString);
 		closeFile(tokens->items[1]);
 		//change working directory back to source
@@ -1662,12 +1633,10 @@ void mvFile(char *FILE, char *dest)
 			curr_clust += destFile.DIR_FstClusLO;	
 		}
 		
-		printf("curr clust is %d\n", curr_clust);
 		
 		struct DIRENTRY tempDir = pathSearch(FILE);
 		//store start offset of dest direntry
 		unsigned int dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;
-		printf("current offset is %x\n", dest_offset);
 		if(tempDir.DIR_Attr == 0x10)
 		{
 			printf("ERROR: Cannot overwrite a directory ../%s\n", FILE);
@@ -1695,11 +1664,9 @@ void mvFile(char *FILE, char *dest)
 		{
 			//file not exits 
 			create(FILE);
-			printf("crated mv file direntry\n");
 			
 			tempDir = pathSearch(FILE);	
 			dest_offset = lseek(file_img, 0, SEEK_CUR) - 32;	
-			printf("dest offset is %x\n", dest_offset);
 			tempDir = src;
 			lseek(file_img, dest_offset, SEEK_SET);
 			write(file_img, &src, sizeof(struct DIRENTRY));
@@ -1729,17 +1696,14 @@ void mvFile(char *FILE, char *dest)
 		for (int i = 0; i < strlen(dest); i++)
 		{
 			src.DIR_Name[i] = toupper(dest[i]);
-			printf("%c", toupper(dest[i]));
 		}
 		for (int i = strlen(dest); i < 11; i++)
 		{
 			src.DIR_Name[i] = ' ';
 		}
-		printf("file name after update is %s\n", src.DIR_Name);
-		printf("src offset is %x\n", src_offset);
+
 		lseek(file_img, src_offset, SEEK_SET);
 		int flag = write(file_img, &src, 32);
-		printf("write %d\n", flag);
 	}
 }
 
@@ -1749,7 +1713,6 @@ int isLastEntry(unsigned int src_offset, unsigned int curr_offset)
 	//find next dir entry, if next dir in the curr clust
 	if ((src_offset + 32) < curr_offset + BytsPerClus)
 	{
-		printf("Next entry in the same clust\n");
 		lseek(file_img, src_offset + 32, SEEK_SET);
 		struct DIRENTRY nextDir;
 		read(file_img, &nextDir, sizeof(struct DIRENTRY));
