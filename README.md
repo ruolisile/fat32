@@ -92,4 +92,6 @@ Removes an empty directory `directory`. </br>
 ## Known Errors and Bugs
 Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br> 
 Bug testing and code review by Amanda Lovett and Liting Zhang.</br>
+
+## Other Credits
 Communication with TA regarding code issues, project status, etc. by Amanda Lovett</br>
