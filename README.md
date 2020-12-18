@@ -45,7 +45,7 @@ Creates a new directory. </br>
 Usage `mkdir <directory>` </br>
 
 ### mv
-By Liting Zhang and Amanda Lovett</br>
+By Liting Zhang</br>
 Usage `mv <from> <to>`. Move a file named `<from>` to directory `<to>` or change the file name `<from>` to `<to>`</br>
 mv for file into directory may be buggy</br>
 
@@ -90,8 +90,9 @@ Useage `rmdir <directory>`. </br>
 Removes an empty directory `directory`. </br>
 
 ## Known Errors and Bugs
-Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br> 
-Bug testing and code review by Amanda Lovett and Liting Zhang.</br>
+* Once enter the file system, double quotation marks must be in pairs or it will fall into segmentation fault. </br> 
+* ls: when listing RED, some "." entries appear among the rest of the entries, when the root cluster is full, displays first 8 bytes of the 3rd cluster as if it was an entry's name, while it's the content of LONGFILE. 
+* mkdir: same issue as with creat in the 3rd cluster. 
+* mv: forget to implement move directories. 
+* read: does not advance the file offset after reading.
 
-## Other Credits
-Communication with TA regarding code issues, project status, etc. by Amanda Lovett</br>
