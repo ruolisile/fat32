@@ -1,4 +1,4 @@
-# COP4610-Proj3
+# FAT32
 This project implements a FAT32 file system. </br>
 Code authors are properly credited within their appropriate functions. </br>
 
